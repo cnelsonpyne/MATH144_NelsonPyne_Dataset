@@ -1,0 +1,121 @@
+---
+title: "Personal Dataset Project"
+author: "Chris Nelson-Pyne"
+format: html
+editor: visual
+---
+
+```{r load_tidyverse}
+
+library(tidyverse)
+```
+
+```{r cleaning_mbta_ridership_data}
+
+MBTA = read.csv("./MBTA/MBTA_Monthly_Ridership_By_Mode_and_Line.csv")
+
+head(MBTA)
+
+MBTA_totals = MBTA %>%
+  filter(daytype =="Total") %>%
+  filter(route_or_line %in% c("All Bus", "Commuter Rail", "Heavy Rail"))
+
+head (MBTA_totals)
+
+write_excel_csv(MBTA_totals, "MBTA_Avg_Daily_Ridership_by_Month.csv")
+
+```
+
+```{r Processing_MBTA & Septa}
+SEPTA_MBTA = read.csv("SEPTA_MBTA Average_Ridership_By_Mode.csv")
+
+head(SEPTA_MBTA)
+
+SEPTA_MBTA = SEPTA_MBTA %>%
+  mutate (Stan_Mode = case_when (Mode == "Bus" ~ "Bus",
+                                 Mode == "All Bus" ~ "Bus",
+                                 Mode == "Heavy Rail" ~ "Heavy Rail",
+                                 Mode == "Regional Rail" ~ "Commuter Rail",
+                                 Mode == "Commuter Rail" ~ "Commuter Rail",
+                                 Mode == "Trolley" ~ "Trolley",
+                                 Mode == "Trackless Trolley" ~ "Trackless Trolley",
+                                 Mode == "CCT" ~ "CCT",
+                                 ))
+head(SEPTA_MBTA)
+SEPTA_MBTA2 = filter (SEPTA_MBTA, Stan_Mode == "Bus" |
+                        Stan_Mode ==  "Heavy Rail" |
+                        Stan_Mode == "Commuter Rail" 
+                      )
+
+Rail_and_bus = mutate (SEPTA_MBTA2, RBMode = case_when(Stan_Mode == "Bus" ~ "Bus",
+                                                       Stan_Mode == "Heavy Rail" ~ "Rail",
+                                                       Stan_Mode == "Commuter Rail" ~ "Rail",
+  ))
+
+Rail_and_bus2 = filter (SEPTA_MBTA, Stan_Mode == "Bus" | Stan_Mode == "Heavy Rail")
+```
+
+```{r EDA1}
+ggplot (data = SEPTA_MBTA, aes(y=Average_Daily_Ridership, x = Stan_Mode, fill = Agency)) + geom_col ()
+
+ggplot (data = SEPTA_MBTA, aes(y =Average_Daily_Ridership, x = Calendar_Year, fill = Agency)) + geom_col ()
+
+MBTA2 = filter (SEPTA_MBTA, Agency == "MBTA")
+
+ggplot (data = SEPTA_MBTA2, aes (x=Average_Daily_Ridership, fill = Agency)) + geom_histogram()
+
+ggplot (data = SEPTA_MBTA2, aes (x=Average_Daily_Ridership, y = Stan_Mode)) + geom_boxplot()
+
+ggplot (data = SEPTA_MBTA2, aes (x=Average_Daily_Ridership, y = Agency)) + geom_boxplot () + ggtitle("Average Daily Ridership: SEPTA and MBTA Buses, Heavy/Commuter Rail") + xlab("Average Daily Ridership Per Month")
+
+ggplot (data = SEPTA_MBTA2, aes (x=Average_Daily_Ridership, y = Stan_Mode, fill=Agency)) + geom_boxplot () + xlab("Average Daily Ridership Per Month") + ylab("Transit Mode") + ggtitle("SEPTA & MBTA Average Daily Ridership by Mode of Travel")
+
+ggplot (data = SEPTA_MBTA2, aes (x=Calendar_Year, y= Average_Daily_Ridership, fill = Stan_Mode)) + geom_col ()
+
+ggplot (data = SEPTA_MBTA, aes (x=Calendar_Year)) + geom_bar ()
+
+ggplot (data = Rail_and_bus, aes (x = Average_Daily_Ridership, fill = RBMode)) + geom_boxplot ()
+
+ggplot (data = Rail_and_bus2, aes (x = Average_Daily_Ridership, fill = Stan_Mode)) + geom_boxplot () + labs(fill="Transit Mode") + xlab("Average Daily Ridership Per Month") + ggtitle ("Comparison of Combined SEPTA and MTBA Heavy Rail and Bus Ridership")
+```
+
+```{r modeling}
+m1 = glm (as.factor (Stan_Mode) ~ Average_Daily_Ridership, data = Rail_and_bus2, family = binomial )
+
+summary(m1)
+
+Rail_and_bus2$RBprobability = m1$fitted.values
+
+Rail_and_bus2$predicted_mode = ifelse(Rail_and_bus2$RBprobability <0.5, "Bus","Heavy Rail")
+
+mean (Rail_and_bus2$predicted_mode==Rail_and_bus2$Stan_Mode)
+
+
+## I abandoned the following model because based on the residual values I did not think that it was going to predict the agency well at all.
+
+##m2 = glm (as.factor (Agency) ~ Average_Daily_Ridership, data = SEPTA_MBTA2, family = binomial)
+
+##summary (m2)
+
+##SEPTA_MBTA2$AProbability = m2$fitted.values
+##SEPTA_MBTA$APredition = ifelse(SEPTA_MBTA2$AProbability <0.5, )
+```
+
+```{r time_series}
+
+
+
+ggplot (data = MBTA2, aes(x=Date_Value, y=Average_Daily_Ridership, color = Stan_Mode)) + geom_line () + xlab ("Time in Months") + ylab ("Daily Average Ridership Per Month") + ggtitle ("MBTA Average Daily Ridership Over Time") + labs(color = "Transit Mode")
+
+SEPTA = filter (SEPTA_MBTA2, Agency == "SEPTA")
+
+ggplot (data = SEPTA, aes(x=Date_Value, y = Average_Daily_Ridership, color = Stan_Mode)) + geom_line () + xlab("Time in Months") + ylab ("Daily Average Ridership Per Month") + ggtitle("SEPTA Average Daily Ridership Over Time") + labs(color = "Transit Mode")
+
+ggplot (data = SEPTA_MBTA2, aes (x=Date_Value, y = Average_Daily_Ridership, color = Agency)) + geom_point () + geom_smooth ()
+
+
+## I was having trouble with the ".groupby" and "groupby()" commands. I had hoped to use one of them to understand average ridership accross all modes over time in each system.
+
+##df.groupby(SEPTA_MBTA2$Date_Value,Average_Daily_Ridership)
+
+```
